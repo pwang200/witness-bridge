@@ -16,11 +16,13 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     const { deploy, log } = deployments
     const { deployer } = await getNamedAccounts()
 
-    log("Deploying...")
+    log(`Deploying...${deployer}`)
+
     await deploy("Door", {
         contract: "Door",
         from: deployer,
         log: true,
         args: [quorum, transferMin, accountCreateMin, sigRewardMin, witnesses],
     })
+
 }

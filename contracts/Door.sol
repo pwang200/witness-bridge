@@ -57,13 +57,15 @@ contract Door {
     uint32 XChainCreateAccountDestMin = 1;
     uint32 XChainCreateAccountDestMax = 1;
     uint32 quorum;
-    uint256 reserve;
+    uint256 public reserve;
     // both doors must use the same config, i.e. *Min
     uint256 immutable transferMin;
     uint256 immutable accountCreateMin;
     uint256 immutable sigRewardMin;
-    // otherDoor must be use in production
+    /* otherDoor must be use in production */
     //string otherDoor;
+
+    /* witnesses update logic must be added in production */
     address payable[] witnesses;
     mapping(address => uint256) unclaimed;
     mapping(uint32 => InboundXChainTx) onFlyTxns;
@@ -87,29 +89,37 @@ contract Door {
         sigRewardMin = sigRewardMin_;
         //otherDoor = otherDoor_;
         witnesses = initWitnesses_;
+        // for (uint256 i = 0; i < witnesses.length; i++) {
+        //     console.log("witness: %s", witnesses[i]);
+        // }
     }
 
     // only owner can add reserve??
-    function addReserve() public payable {
+    function addReserve() external payable {
         reserve += msg.value;
     }
 
-    function XChainClaimIdCreate(string memory source_)
-        public
+    function XChainClaimIdCreate(string calldata source_)
+        external
         returns (uint32)
     {
         if (bytes(source_).length == 0) revert WrongSource();
         InboundXChainTx storage itx = onFlyTxns[++lastClaimId];
         itx.source = source_;
-        emit XChainClaimIdEvent(source_, lastClaimId);
+        emit XChainClaimIdEvent(itx.source, lastClaimId);
+        console.log(
+            "Door emit XChainClaimIdEvent %s, %s",
+            itx.source,
+            lastClaimId
+        );
         return lastClaimId;
     }
 
     function XChainCommit(
         uint32 claimId_,
         uint256 sigReward_,
-        string memory dest_
-    ) public payable {
+        string calldata dest_
+    ) external payable {
         require(msg.value >= transferMin);
         require(sigReward_ >= sigRewardMin);
 
@@ -120,13 +130,21 @@ contract Door {
             sigReward_,
             dest_
         );
+        // console.log(
+        //     "Door emit XChainCommitEvent %s, %s, %s, %s, %s", //
+        //     uint256(XChainCommitType.transferAsset),
+        //     claimId_,
+        //     uint256(msg.value),
+        //     sigReward_,
+        //     dest_
+        // );
         reserve += msg.value;
     }
 
-    function XChainCreateAccountCommit(uint256 sigReward_, string memory dest_)
-        public
-        payable
-    {
+    function XChainCreateAccountCommit(
+        uint256 sigReward_,
+        string calldata dest_
+    ) external payable {
         require(msg.value >= accountCreateMin);
         require(sigReward_ >= sigRewardMin);
         emit XChainCommitEvent(
@@ -151,7 +169,7 @@ contract Door {
     }
 
     function compareStrings(string memory a, string memory b)
-        public
+        private
         pure
         returns (bool)
     {
@@ -163,6 +181,12 @@ contract Door {
         InboundXChainTx storage itxPtr = onFlyTxns[sqn_];
         assert(itxPtr.hasQuorum);
         InboundXChainTxVote storage votePtr = itxPtr.votes[itxPtr.electedIndex];
+        console.log(
+            "Sqn=%s, Gonna pay %s %s",
+            sqn_,
+            votePtr.dest,
+            votePtr.amount
+        );
         if (!votePtr.dest.send(votePtr.amount)) {
             unclaimed[votePtr.dest] += votePtr.amount;
         }
@@ -181,6 +205,14 @@ contract Door {
         address payable dest_,
         string memory source_
     ) public payable {
+        console.log(
+            "XChainAddTransferAttestation witness %s, from %s to %s",
+            msg.sender,
+            source_,
+            dest_
+        );
+        // console.log(sqn_);
+        // console.log(amount_);
         if (!isWitness(witnesses, msg.sender)) revert UnknownWitness();
 
         if (bytes(onFlyTxns[sqn_].source).length == 0)
@@ -206,20 +238,52 @@ contract Door {
                     revert OutRangeAttestation();
 
                 vote.witnesses.push(payable(msg.sender));
+                console.log(
+                    "XChainAddTransferAttestation adding more vote. %s:%s",
+                    itxPtr.votes.length,
+                    vote.witnesses.length
+                );
                 if (vote.witnesses.length == quorum) {
                     itxPtr.hasQuorum = true;
                     itxPtr.electedIndex = i;
                     pay(sqn_);
-                    return;
                 }
+                return;
+            } else {
+                console.log(
+                    "XChainAddTransferAttestation mismatch vote, %s:%s",
+                    vote.amount,
+                    amount_
+                );
+                console.log(
+                    "XChainAddTransferAttestation mismatch vote, %s:%s",
+                    vote.sigReward,
+                    sigReward_
+                );
+                console.log(
+                    "XChainAddTransferAttestation mismatch vote, %s:%s",
+                    vote.dest,
+                    dest_
+                );
             }
         }
 
         InboundXChainTxVote storage newVote = itxPtr.votes.push();
         newVote.amount = amount_;
-        newVote.sigReward == sigReward_;
+        newVote.sigReward = sigReward_;
         newVote.dest = dest_;
         newVote.witnesses.push(payable(msg.sender));
+        console.log(
+            "XChainAddTransferAttestation adding different vote, %s:%s, %s",
+            itxPtr.votes.length,
+            newVote.witnesses.length,
+            newVote.sigReward
+        );
+        // console.log(
+        //     "XChainAddTransferAttestation adding different vote, %s:%s",
+        //     itxPtr.votes.length,
+        //     newVote.witnesses.length
+        // );
         if (quorum == 1) {
             itxPtr.hasQuorum = true;
             assert(itxPtr.votes.length == 1);
@@ -287,14 +351,14 @@ contract Door {
                     itxPtr.hasQuorum = true;
                     itxPtr.electedIndex = i;
                     createAccounts();
-                    return;
                 }
+                return;
             }
         }
 
         InboundXChainTxVote storage newVote = itxPtr.votes.push();
         newVote.amount = amount_;
-        newVote.sigReward == sigReward_;
+        newVote.sigReward = sigReward_;
         newVote.dest = dest_;
         newVote.witnesses.push(payable(msg.sender));
         if (quorum == 1) {
@@ -307,6 +371,7 @@ contract Door {
     }
 
     // if sender owns an existing claimId, claim the asset if at the right status
+    // TODO won't be used yet
     function claim(address payable dest) public payable {
         if (unclaimed[msg.sender] == 0) revert nothingToClaim();
         if (dest.send(unclaimed[msg.sender])) {
@@ -315,6 +380,18 @@ contract Door {
     }
 }
 
+// function simplePay(address payable toAddress) public payable {
+//     uint256 before = toAddress.balance;
+//     bool good = toAddress.send(msg.value);
+//     console.log(
+//         "simplePay from %s to %s for %s",
+//         msg.sender,
+//         toAddress,
+//         msg.value
+//     );
+//     uint256 afterSent = toAddress.balance;
+//     console.log("simplePay result %s, %s", good, afterSent - before);
+// }
 // function XChainAddAttestation(
 //     XChainCommitType eventType_,
 //     uint32 sqn_,

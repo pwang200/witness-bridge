@@ -4,9 +4,9 @@ coverage
 coverage.json
 typechain
 typechain-types
-./idea
+.idea
 
 #Hardhat files
 cache
 artifacts
-
+gas-report.txt
