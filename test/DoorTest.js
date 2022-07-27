@@ -15,7 +15,7 @@ describe("Door contract tests", function () {
         [deployer1, deployer2, witness1, witness2, Alice, Bob] = await ethers.getSigners()
         witnesses = [witness1.address, witness2.address]
 
-        console.log(`deploying two doors from ${deployer1.address} and ${deployer2.address} ...`)
+        //console.log(`deploying two doors from ${deployer1.address} and ${deployer2.address} ...`)
         doorFactory = await ethers.getContractFactory("Door", deployer1)
         door1 = await doorFactory.deploy(quorum, transferMin, accountCreateMin, sigRewardMin, witnesses, { value: initReserve });
         await door1.deployed()
@@ -23,8 +23,8 @@ describe("Door contract tests", function () {
         doorFactory = doorFactory.connect(deployer2)
         door2 = await doorFactory.deploy(quorum, transferMin, accountCreateMin, sigRewardMin, witnesses, { value: initReserve });
         await door2.deployed()
-        console.log(`deployed two doors at ${door1.address} and ${door2.address}`)
-        console.log(`Alice and Bob addresses ${Alice.address} ${Bob.address}`)
+        //console.log(`deployed two doors at ${door1.address} and ${door2.address}`)
+        //console.log(`Alice and Bob addresses ${Alice.address} ${Bob.address}`)
     })
     // describe("simpler", function () { }) // nest is ok
 
@@ -41,10 +41,11 @@ describe("Door contract tests", function () {
     })
 
     it("claimId event", async function () {
-        const BobAddress = "BobAddress" //TODO Bob.address won't work
+        //const BobAddress = "BobAddress" //TODO Bob.address.toString() won't work
+        const BobAddress = Bob.address
         await expect(door1.XChainClaimIdCreate(BobAddress))
             .to.emit(door1, "XChainClaimIdEvent")
-            .withArgs(BobAddress, 1);
+            .withArgs(BobAddress, 1)
 
         // const tx = await door1.XChainClaimIdCreate("BobAddress")
         // const receipt = await tx.wait()
@@ -54,7 +55,7 @@ describe("Door contract tests", function () {
     })
 
     it("commit events", async function () {
-        const BobAddress = "BobAddress" //TODO Bob.address won't work
+        const BobAddress = Bob.address
         // enum XChainCommitType {
         //     createAccount,
         //     transferAsset

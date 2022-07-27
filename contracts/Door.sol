@@ -16,7 +16,7 @@ contract Door {
     }
 
     // destination chain event, prepare to transfer
-    event XChainClaimIdEvent(string indexed source, uint32 indexed claimId);
+    event XChainClaimIdEvent(bytes indexed source, uint32 indexed claimId);
 
     // source chain event, initiate transfer or account create
     event XChainCommitEvent(
@@ -24,7 +24,7 @@ contract Door {
         uint32 indexed claimId,
         uint256 amount,
         uint256 sigReward,
-        string indexed destination
+        bytes indexed destination
     );
 
     // destination chain event, transfer or account create gets quorum
@@ -33,12 +33,12 @@ contract Door {
         uint32 indexed claimId,
         uint256 amount,
         uint256 sigReward,
-        string indexed destination
+        bytes indexed destination
     );
 
     // destination door, an incomming tx for transfer or account create
     struct InboundXChainTx {
-        string source;
+        bytes source;
         bool hasQuorum;
         uint256 electedIndex;
         InboundXChainTxVote[] votes;
@@ -63,16 +63,13 @@ contract Door {
     uint256 immutable accountCreateMin;
     uint256 immutable sigRewardMin;
     /* otherDoor must be use in production */
-    //string otherDoor;
+    //bytes otherDoor;
 
     /* witnesses update logic must be added in production */
     address payable[] witnesses;
     mapping(address => uint256) unclaimed;
     mapping(uint32 => InboundXChainTx) onFlyTxns;
     mapping(uint32 => InboundXChainTx) onFlyAccountTxns;
-
-    //string memory otherDoor_,
-    //address payable[] memory initWitnesses_
 
     constructor(
         uint32 quorum_,
@@ -99,7 +96,7 @@ contract Door {
         reserve += msg.value;
     }
 
-    function XChainClaimIdCreate(string calldata source_)
+    function XChainClaimIdCreate(bytes calldata source_)
         external
         returns (uint32)
     {
@@ -107,18 +104,13 @@ contract Door {
         InboundXChainTx storage itx = onFlyTxns[++lastClaimId];
         itx.source = source_;
         emit XChainClaimIdEvent(itx.source, lastClaimId);
-        console.log(
-            "Door emit XChainClaimIdEvent %s, %s",
-            itx.source,
-            lastClaimId
-        );
         return lastClaimId;
     }
 
     function XChainCommit(
         uint32 claimId_,
         uint256 sigReward_,
-        string calldata dest_
+        bytes calldata dest_
     ) external payable {
         require(msg.value >= transferMin);
         require(sigReward_ >= sigRewardMin);
@@ -130,21 +122,13 @@ contract Door {
             sigReward_,
             dest_
         );
-        // console.log(
-        //     "Door emit XChainCommitEvent %s, %s, %s, %s, %s", //
-        //     uint256(XChainCommitType.transferAsset),
-        //     claimId_,
-        //     uint256(msg.value),
-        //     sigReward_,
-        //     dest_
-        // );
         reserve += msg.value;
     }
 
-    function XChainCreateAccountCommit(
-        uint256 sigReward_,
-        string calldata dest_
-    ) external payable {
+    function XChainCreateAccountCommit(uint256 sigReward_, bytes calldata dest_)
+        external
+        payable
+    {
         require(msg.value >= accountCreateMin);
         require(sigReward_ >= sigRewardMin);
         emit XChainCommitEvent(
@@ -168,7 +152,7 @@ contract Door {
         return false;
     }
 
-    function compareStrings(string memory a, string memory b)
+    function comparebytess(bytes memory a, bytes memory b)
         private
         pure
         returns (bool)
@@ -203,22 +187,14 @@ contract Door {
         uint256 amount_,
         uint256 sigReward_,
         address payable dest_,
-        string memory source_
+        bytes memory source_
     ) public payable {
-        console.log(
-            "XChainAddTransferAttestation witness %s, from %s to %s",
-            msg.sender,
-            source_,
-            dest_
-        );
-        // console.log(sqn_);
-        // console.log(amount_);
         if (!isWitness(witnesses, msg.sender)) revert UnknownWitness();
 
         if (bytes(onFlyTxns[sqn_].source).length == 0)
             revert OutRangeAttestation();
 
-        if (!compareStrings(source_, onFlyTxns[sqn_].source))
+        if (!comparebytess(source_, onFlyTxns[sqn_].source))
             revert WrongSource();
 
         InboundXChainTx storage itxPtr = onFlyTxns[sqn_];
@@ -279,11 +255,7 @@ contract Door {
             newVote.witnesses.length,
             newVote.sigReward
         );
-        // console.log(
-        //     "XChainAddTransferAttestation adding different vote, %s:%s",
-        //     itxPtr.votes.length,
-        //     newVote.witnesses.length
-        // );
+
         if (quorum == 1) {
             itxPtr.hasQuorum = true;
             assert(itxPtr.votes.length == 1);
@@ -379,93 +351,3 @@ contract Door {
         }
     }
 }
-
-// function simplePay(address payable toAddress) public payable {
-//     uint256 before = toAddress.balance;
-//     bool good = toAddress.send(msg.value);
-//     console.log(
-//         "simplePay from %s to %s for %s",
-//         msg.sender,
-//         toAddress,
-//         msg.value
-//     );
-//     uint256 afterSent = toAddress.balance;
-//     console.log("simplePay result %s, %s", good, afterSent - before);
-// }
-// function XChainAddAttestation(
-//     XChainCommitType eventType_,
-//     uint32 sqn_,
-//     uint256 amount_,
-//     uint256 sigReward_,
-//     address dest_,
-//     string memory source_
-// ) public view {
-//     if (!isWitness(witnesses, msg.sender)) revert UnknownWitness();
-// }
-
-// struct BridgeInfo {
-//     //immutable
-//     string otherDoor;
-//     string otherIssuer;
-//     string symbol;
-//     //string pubKey;
-// }
-
-//BridgeInfobridgeInfo;
-
-// function updateWitnesses(address[] memory witnesses_) public {
-//     witnesses = witnesses_;
-// }
-// verify and update onFlyTxns or onFlyCreateAccountTxns
-// for transfer asset:
-//     if reached quorum, update state and distribute rewards
-//     if also have dest, try to deliver,
-//          if good, remove from onFlyTxns, else update statue and wait for claim
-// for account creation
-//     sequential processing
-
-// if (eventType_ == XChainCommitType.createAccount) {
-//             if (
-//                 sqn_ < XChainCreateAccountClaimMin || sqn_ > XChainCreateAccountClaimMax + 1
-//             ) revert OutRangeAttestation();
-
-//             if (sqn_ == XChainCreateAccountClaimMax + 1) XChainCreateAccountClaimMax++;
-
-//             InboundXChainTx storage itxPtr = onFlyAccountTxns[sqn_];
-//             if (itxPtr.status == InboundXChainTxStatus.waitingForClaim)
-//                 revert OutRangeAttestation();
-
-//             if (itxPtr.status == InboundXChainTxStatus.inited) {
-//                 bool found = false;
-//                 for (uint256 i = 0; i < itxPtr.votes.length; ++i) {
-//                     InboundXChainTxVote storage vote = itxPtr.votes[i];
-//                     if (
-//                         vote.amount == amount_ &&
-//                         vote.sigReward == sigReward_ &&
-//                         vote.dest == dest_
-//                     ) {
-//                         if (isWitness(vote.witnesses, msg.sender))
-//                             revert duplicatedVote();
-//                     }
-//                 }
-//             }
-//             //     uint32 index = sqn_ - XChainCreateAccountClaimCount;
-//             // if (index > onFlyCreateAccountTxns.length)
-//             //     revert OutRangeAttestation();
-//             // if (index == onFlyCreateAccountTxns.length) {
-//             //     onFlyCreateAccountTxns.push();
-//             // } else {}
-
-//             //            for (uint256 i = 0; i < onFlyCreateAccountTxns.length; ++i) {}
-//         } else {}
-
-//         //        struct InboundXChainTx {
-//         //     string source;
-//         //     InboundXChainTxStatus status; // default to InboundXChainTxStatus.inited;
-//         //     InboundXChainTxVote[] votes;
-//         // }
-// enum InboundXChainTxStatus {
-//     inited,
-//     needSigs,
-//     waitingForClaim
-// }
