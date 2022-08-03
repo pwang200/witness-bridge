@@ -6,8 +6,8 @@ import "hardhat/console.sol";
 contract Door {
     error UnknownWitness();
     error OutRangeAttestation();
-    error duplicatedVote();
-    error nothingToClaim();
+    error DuplicatedVote();
+    error NothingToClaim();
     error WrongSource();
 
     enum XChainCommitType {
@@ -15,8 +15,10 @@ contract Door {
         transferAsset
     }
 
-    // destination chain event, prepare to transfer
-    event XChainClaimIdEvent(bytes indexed source, uint32 indexed claimId);
+    // event FundEvent(address indexed source, uint256 amount);
+
+    // destination chain event, step 0, prepare to transfer
+    event XChainClaimIdEvent(bytes source, uint32 indexed claimId);
 
     // source chain event, initiate transfer or account create
     event XChainCommitEvent(
@@ -24,7 +26,8 @@ contract Door {
         uint32 indexed claimId,
         uint256 amount,
         uint256 sigReward,
-        bytes indexed destination
+        address source,
+        bytes destination
     );
 
     // destination chain event, transfer or account create gets quorum
@@ -33,7 +36,7 @@ contract Door {
         uint32 indexed claimId,
         uint256 amount,
         uint256 sigReward,
-        bytes indexed destination
+        bytes destination
     );
 
     // destination door, an incomming tx for transfer or account create
@@ -52,7 +55,7 @@ contract Door {
         address payable[] witnesses;
     }
 
-    uint32 lastClaimId = 0; // destination chain. first claimId = 1
+    uint32 previousClaimId = 0; // destination chain. first claimId = 1
     uint32 XChainCreateAccountSourceSqn = 1;
     uint32 XChainCreateAccountDestMin = 1;
     uint32 XChainCreateAccountDestMax = 1;
@@ -84,7 +87,7 @@ contract Door {
         transferMin = transferMin_;
         accountCreateMin = accountCreateMin_;
         sigRewardMin = sigRewardMin_;
-        //otherDoor = otherDoor_;
+        //otherDoor = https://ethereum.stackexchange.com/questions/760/how-is-the-address-of-an-ethereum-contract-computed
         witnesses = initWitnesses_;
         // for (uint256 i = 0; i < witnesses.length; i++) {
         //     console.log("witness: %s", witnesses[i]);
@@ -94,6 +97,7 @@ contract Door {
     // only owner can add reserve??
     function addReserve() external payable {
         reserve += msg.value;
+        // emit FundEvent(msg.sender, msg.value);
     }
 
     function XChainClaimIdCreate(bytes calldata source_)
@@ -101,10 +105,10 @@ contract Door {
         returns (uint32)
     {
         if (bytes(source_).length == 0) revert WrongSource();
-        InboundXChainTx storage itx = onFlyTxns[++lastClaimId];
+        InboundXChainTx storage itx = onFlyTxns[++previousClaimId];
         itx.source = source_;
-        emit XChainClaimIdEvent(itx.source, lastClaimId);
-        return lastClaimId;
+        emit XChainClaimIdEvent(itx.source, previousClaimId);
+        return previousClaimId;
     }
 
     function XChainCommit(
@@ -120,6 +124,7 @@ contract Door {
             claimId_,
             msg.value,
             sigReward_,
+            msg.sender,
             dest_
         );
         reserve += msg.value;
@@ -136,6 +141,7 @@ contract Door {
             XChainCreateAccountSourceSqn++,
             msg.value,
             sigReward_,
+            msg.sender,
             dest_
         );
         reserve += msg.value;
@@ -166,7 +172,7 @@ contract Door {
         assert(itxPtr.hasQuorum);
         InboundXChainTxVote storage votePtr = itxPtr.votes[itxPtr.electedIndex];
         console.log(
-            "Sqn=%s, Gonna pay %s %s",
+            "Door::pay sqn=%s, gonna pay %s %s",
             sqn_,
             votePtr.dest,
             votePtr.amount
@@ -203,7 +209,7 @@ contract Door {
 
         for (uint256 i = 0; i < itxPtr.votes.length; ++i) {
             InboundXChainTxVote storage vote = itxPtr.votes[i];
-            if (isWitness(vote.witnesses, msg.sender)) revert duplicatedVote();
+            if (isWitness(vote.witnesses, msg.sender)) revert DuplicatedVote();
 
             if (
                 vote.amount == amount_ &&
@@ -225,23 +231,24 @@ contract Door {
                     pay(sqn_);
                 }
                 return;
-            } else {
-                console.log(
-                    "XChainAddTransferAttestation mismatch vote, %s:%s",
-                    vote.amount,
-                    amount_
-                );
-                console.log(
-                    "XChainAddTransferAttestation mismatch vote, %s:%s",
-                    vote.sigReward,
-                    sigReward_
-                );
-                console.log(
-                    "XChainAddTransferAttestation mismatch vote, %s:%s",
-                    vote.dest,
-                    dest_
-                );
             }
+            // else {
+            //     console.log(
+            //         "XChainAddTransferAttestation mismatch vote, %s:%s",
+            //         vote.amount,
+            //         amount_
+            //     );
+            //     console.log(
+            //         "XChainAddTransferAttestation mismatch vote, %s:%s",
+            //         vote.sigReward,
+            //         sigReward_
+            //     );
+            //     console.log(
+            //         "XChainAddTransferAttestation mismatch vote, %s:%s",
+            //         vote.dest,
+            //         dest_
+            //     );
+            // }
         }
 
         InboundXChainTxVote storage newVote = itxPtr.votes.push();
@@ -308,7 +315,7 @@ contract Door {
 
         for (uint256 i = 0; i < itxPtr.votes.length; ++i) {
             InboundXChainTxVote storage vote = itxPtr.votes[i];
-            if (isWitness(vote.witnesses, msg.sender)) revert duplicatedVote();
+            if (isWitness(vote.witnesses, msg.sender)) revert DuplicatedVote();
 
             if (
                 vote.amount == amount_ &&
@@ -345,7 +352,7 @@ contract Door {
     // if sender owns an existing claimId, claim the asset if at the right status
     // TODO won't be used yet
     function claim(address payable dest) public payable {
-        if (unclaimed[msg.sender] == 0) revert nothingToClaim();
+        if (unclaimed[msg.sender] == 0) revert NothingToClaim();
         if (dest.send(unclaimed[msg.sender])) {
             unclaimed[msg.sender] = 0;
         }
