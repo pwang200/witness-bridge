@@ -1,0 +1,3 @@
+./geth --datadir node1 account import --password password.txt sk.txt
+./geth init --datadir node1 genesis.json
+./geth --datadir node1 --port 30306 --networkid 3512 --nodiscover --unlock 1febbad526e768b23c7b282da89e9d1cdaa0842d --password password.txt --mine --http --allow-insecure-unlock

@@ -1,3 +1,11 @@
+//setup local geth node, using the genesis.json file and 
+//run the commands in geth_commands.txt
+//password.txt, sk.txt have plaintxt password, private key
+//the .env file should have accounts info 
+//accounts of alice, witnesses should be pre-funded
+//for local geth, fund them with genesis.json
+//for remote chain, fund them with a faucet
+
 yarn hardhat run scripts/deploy.js --network local_geth
 // copy contract address to bridgeParameter.js
 yarn hardhat run scripts/deploy.js --network xrpl_evm
