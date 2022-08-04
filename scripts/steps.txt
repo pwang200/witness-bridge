@@ -1,0 +1,9 @@
+yarn hardhat run scripts/deploy.js --network local_geth
+// copy contract address to bridgeParameter.js
+yarn hardhat run scripts/deploy.js --network xrpl_evm
+// copy contract address to bridgeParameter.js
+yarn hardhat run scripts/witness.js 
+// change the witness index in code
+// hardhat scripts cannot have command line args
+yarn hardhat run scripts/witness.js 
+// this start second witness
